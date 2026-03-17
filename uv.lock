@@ -1193,6 +1193,7 @@ dependencies = [
     { name = "langfuse" },
     { name = "openinference-instrumentation-smolagents" },
     { name = "smolagents", extra = ["gradio", "telemetry"] },
+    { name = "wikipedia-api" },
 ]
 
 [package.metadata]
@@ -1202,6 +1203,7 @@ requires-dist = [
     { name = "langfuse", specifier = ">=4.0.0" },
     { name = "openinference-instrumentation-smolagents", specifier = ">=0.1.24" },
     { name = "smolagents", extras = ["gradio", "telemetry"], specifier = ">=1.24.0" },
+    { name = "wikipedia-api", specifier = ">=0.10.2" },
 ]
 
 [[package]]
@@ -2377,6 +2379,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e3/ad/4a96c425be6fb67e0621e62d86c402b4a17ab2be7f7c055d9bd2f638b9e2/uvicorn-0.42.0.tar.gz", hash = "sha256:9b1f190ce15a2dd22e7758651d9b6d12df09a13d51ba5bf4fc33c383a48e1775", size = 85393, upload-time = "2026-03-16T06:19:50.077Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/89/f8827ccff89c1586027a105e5630ff6139a64da2515e24dafe860bd9ae4d/uvicorn-0.42.0-py3-none-any.whl", hash = "sha256:96c30f5c7abe6f74ae8900a70e92b85ad6613b745d4879eb9b16ccad15645359", size = 68830, upload-time = "2026-03-16T06:19:48.325Z" },
+]
+
+[[package]]
+name = "wikipedia-api"
+version = "0.10.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/59/a6f5790043cff046658d44bc5b594a7d0cc0d9a1a6911a0df6e7aba2179c/wikipedia_api-0.10.2.tar.gz", hash = "sha256:93fc84d2d88b043c626a03bc013a741c206ab60c0517bfce51fa60a0edc5087d", size = 29841, upload-time = "2026-03-06T22:01:16.615Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/41/cf1ceb3071b58175d6960d5f45bfd5c007fc8ab5bec8ca189efd02bb05e4/wikipedia_api-0.10.2-py3-none-any.whl", hash = "sha256:0aa6d09e46909d396d81af97de5dee06004c1f823725b4f66c352b1096d48163", size = 22690, upload-time = "2026-03-06T22:01:15.024Z" },
 ]
 
 [[package]]
