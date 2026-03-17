@@ -14,4 +14,4 @@ RUN uv sync
 
 COPY . .
 
-CMD ["uv", "run", "src/main.py"]
+CMD ["uv", "run", "--env-file",  ".env", "src/main.py"]

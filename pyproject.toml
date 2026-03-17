@@ -8,7 +8,7 @@ dependencies = [
     "ddgs>=9.11.4",
     "gradio>=6.9.0",
     "langchain>=1.2.12",
+    "langchain-community>=0.4.1",
     "langchain-openai>=1.1.11",
     "langfuse>=4.0.0",
-    "python-dotenv>=1.2.2",
 ]
