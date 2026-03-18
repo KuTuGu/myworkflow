@@ -15,7 +15,7 @@ class MarkItDownTool(Tool):
         "file_path": {
             "type": "string", 
             "description": "Local path to the file to convert to markdown. Don't support url! You should use download tool firstly to get the file."
-        }
+        },
     }
     output_type = "string"
     
@@ -35,12 +35,10 @@ class MarkItDownTool(Tool):
     def forward(self, file_path: str) -> str:
         """Convert the specified file to markdown format."""
 
-        # Check if file exists
         if not os.path.exists(file_path):
             return f"Error: File '{file_path}' does not exist."
         
         try:
-            # Convert file to markdown
             result = self.md.convert(file_path)
             return result.text_content
         except Exception as e:
