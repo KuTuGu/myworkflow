@@ -1405,7 +1405,7 @@ requires-dist = [
     { name = "openai", specifier = ">=2.28.0" },
     { name = "openinference-instrumentation-smolagents", specifier = ">=0.1.24" },
     { name = "selenium", specifier = ">=4.41.0" },
-    { name = "smolagents", extras = ["gradio", "telemetry", "toolkit"], specifier = ">=1.24.0" },
+    { name = "smolagents", extras = ["gradio", "telemetry", "toolkit"], git = "https://github.com/KuTuGu/smolagents?branch=feature%2Fskills" },
     { name = "wikipedia-api", specifier = ">=0.10.2" },
 ]
 
@@ -2546,8 +2546,8 @@ wheels = [
 
 [[package]]
 name = "smolagents"
-version = "1.24.0"
-source = { registry = "https://pypi.org/simple" }
+version = "1.25.0.dev0"
+source = { git = "https://github.com/KuTuGu/smolagents?branch=feature%2Fskills#857f5fa8daf6ddbecdb2fa5c0d766927e3cc1082" }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "jinja2" },
@@ -2555,10 +2555,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "rich" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0a/1c/8d8e7f39f3586dc85a7f96681b08b7c1cfbd734b258a025f368632f2d666/smolagents-1.24.0.tar.gz", hash = "sha256:4d5028ffbd72aca85fb2e8daac52d03fb7d4290a9bf99dbc311dd65980f6b5de", size = 225246, upload-time = "2026-01-16T05:37:04.156Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/7a/461ead649c088d30f7847ef1c70f245a9c188381ed09a264633831050497/smolagents-1.24.0-py3-none-any.whl", hash = "sha256:54853759d07a92a939f1ff59238b757fb1a153204c90b69324c8e9709025aa86", size = 155727, upload-time = "2026-01-16T05:37:02.903Z" },
 ]
 
 [package.optional-dependencies]

@@ -7,14 +7,16 @@ from markitdown import MarkItDown
 from openai import OpenAI
 
 class MarkItDownTool(Tool):
-    """A tool that converts various file types to markdown using MarkItDown."""
+    """A tool for reading files in Markdown format, supporting any file type(Files, Images, Audios, Youtube-transcription, etc.).
+    IMPORTANT!!! Use this tool to read any file, no other ways.
+    """
     
     name = "markitdown"
-    description = "Convert various file types (PDF, DOCX, PPTX, images, etc.) to markdown format. Useful for reading and processing documents."
+    description = "Reading files in Markdown format, supporting any file type(Files, Images, Audios, Youtube-transcription, etc.)."
     inputs = {
         "file_path": {
             "type": "string", 
-            "description": "Local path to the file to convert to markdown. Don't support url! You should use download tool firstly to get the file."
+            "description": "Local path to the file to read. Don't support url! You should use download tool firstly to get the file."
         },
     }
     output_type = "string"
@@ -33,7 +35,7 @@ class MarkItDownTool(Tool):
         )
 
     def forward(self, file_path: str) -> str:
-        """Convert the specified file to markdown format."""
+        """Read any file."""
 
         if not os.path.exists(file_path):
             return f"Error: File '{file_path}' does not exist."

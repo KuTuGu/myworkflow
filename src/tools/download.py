@@ -10,12 +10,11 @@ class DownloadTool(Tool):
     """
     A tool for downloading files from URLs using httpx with support for various file types.
     
-    This tool can download files from HTTP/HTTPS URLs and save them to the local filesystem.
-    It handles common file types including images, documents, archives, and more.
+    This tool is often used in conjunction with MarkitdownTool to read multimedia resource content.
     """
     
     name = "download"
-    description = "Download files from URLs to local filesystem. Supports various file types including images, documents, PDFs, archives, etc."
+    description = "Download files from URLs to local filesystem. Often used in conjunction with MarkitdownTool to read multimedia resource content."
     inputs = {
         "url": {
             "type": "string", 
