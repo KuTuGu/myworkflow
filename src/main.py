@@ -1,11 +1,27 @@
-from langfuse import get_client
-from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+from agent import chat
+import gradio as gr
 
-from ui import CatchErrorAndMultiModelGradioUI
-from agent import root_agent
+def create_app():
+    chatbot = gr.Chatbot(
+        label="Agent",
+        latex_delimiters=[
+            {"left": r"$$", "right": r"$$", "display": True},
+            {"left": r"$", "right": r"$", "display": False},
+            {"left": r"\[", "right": r"\]", "display": True},
+            {"left": r"\(", "right": r"\)", "display": False},
+        ],
+    )
 
-langfuse = get_client()
-SmolagentsInstrumentor().instrument()
+    demo = gr.ChatInterface(
+        fn=chat,
+        chatbot=chatbot,
+        title="聊天机器人",
+        editable=True,
+        multimodal=True,
+        save_history=True,
+    )
+    return demo
 
-gradio_ui = CatchErrorAndMultiModelGradioUI(root_agent, file_upload_folder="uploads")
-gradio_ui.launch(share=False, server_name="0.0.0.0", server_port=8100)
+if __name__ == "__main__":
+    demo = create_app()
+    demo.launch(share=False, server_name="0.0.0.0", server_port=8100)

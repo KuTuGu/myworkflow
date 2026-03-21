@@ -1,106 +1,206 @@
-from smolagents import OpenAIModel, CodeAgent, ToolCallingAgent
-from smolagents import WebSearchTool, WikipediaSearchTool, VisitWebpageTool
-from tools import MarkItDownTool, DownloadTool, browser_tools
-from tools.browser import helium_instructions, save_screenshot
-from skills import skills
+from langchain_openai import ChatOpenAI
+from deepagents import create_deep_agent
+from langgraph.checkpoint.memory import MemorySaver
+from deepagents.backends import FilesystemBackend
+from langgraph.store.memory import InMemoryStore
+from langchain.messages import AIMessage, ToolMessage
+from langfuse import get_client
 import os
+import time
+import shutil
+import json
+from typing import Generator
 
 api_key = os.environ["OPENAI_API_KEY"]
 api_base = os.environ["OPENAI_URL"]
 model_id = os.environ["OPENAI_MODEL"]
 
-model = OpenAIModel(
-    model_id=model_id,
-    api_base=api_base,
+langfuse = get_client(public_key="project_a_key")
+
+model = ChatOpenAI(
+    model=model_id,
+    base_url=api_base,
     api_key=api_key,
-    temperature=0.7,
-    max_tokens=100000,
-    top_p=0.9,
 )
 
-markitdown = MarkItDownTool(api_key, api_base, model_id)
-web_tools = [WebSearchTool(), WikipediaSearchTool(), VisitWebpageTool()]
-browser_tools = [VisitWebpageTool()] + browser_tools
-file_tools = [DownloadTool(), markitdown]
-
-MAX_EXECUTION_TIME_SECONDS = 600 # 10 mins
-executor_kwargs = {
-    "timeout_seconds": MAX_EXECUTION_TIME_SECONDS,
-}
-
-websearch_agent = CodeAgent(
-    tools=web_tools + file_tools,
-    add_base_tools=True,
-    skills=skills,
+agent = create_deep_agent(
+    name="main-agent",
     model=model,
-    name="web_search_agent",
-    description="网络信息搜集者",
-    max_steps=20,
-    executor_kwargs=executor_kwargs,
-    instructions="""
-        你是一个支持网络的多模态agent，可以搜索、读取各种多媒体资料，请尽量以英语资料为主；
-        搜索时请注意规划搜索顺序，而不是直接根据完整输入进行搜索；
-        比如用户询问最近某个领域的趋势，你应该先确定搜索时间范围，再确定这个领域的核心网站是什么；
-        如果是代码问题，优先在github、stackoverflow网站搜索；最后再根据时间和核心网站进行搜索。
-    """,
+    backend=FilesystemBackend(root_dir=os.path.dirname(__file__), virtual_mode=True),
+    skills=["/skills"],
+    store=InMemoryStore(),
+    memory=["/memories/AGENTS.md"],
+    system_prompt="""
+        You may have some SOUL files at /memories folder with additional instructions and preferences.
+        Read them at the start of conversations to understand user preferences.
+        When users provide feedback like "please always do X" or "I prefer Y", update them using the edit_file tool.
+        IMPORTANT: Unless specified, other files you generate should be stored in the /dist directory!
+    """
+    # subagents=subagents,
 )
 
-webbrowser_agent = CodeAgent(
-    additional_authorized_imports=["helium"],
-    tools=browser_tools + file_tools,
-    add_base_tools=True,
-    skills=skills,
-    model=model,
-    step_callbacks=[save_screenshot],
-    name="webbrowser_agent",
-    description="网页浏览者",
-    executor_kwargs=executor_kwargs,
-    verbosity_level=2,
-    instructions=helium_instructions + """
-        你是一个浏览器控制的多模态agent，你可以使用BrowserTool来浏览当前页面、搜索文本、关闭弹窗，返回上一页等；
-        注意：浏览超出屏幕的内容时，优先使用scale_down而不是滚动窗口，只有当scale_down缩小的内容你无法识别时，才考虑滚动窗口；
-        还有不要忘了helium，它为你提供了更多页面操作。
-    """,
-)
-webbrowser_agent.python_executor("from helium import *")
+# Skip internal middleware steps - only show meaningful node names
+INTERESTING_NODES = {"model", "tools"}
+def chat(message: str, history: list[dict]) -> Generator:
+    text = message.get("text", "")
+    files = message.get("files", [])
 
-local_agent = CodeAgent(
-    additional_authorized_imports=["*"],
-    tools=file_tools,
-    add_base_tools=True,
-    skills=skills,
-    model=model,
-    name="local_agent",
-    description="本地工具调用",
-    executor_kwargs=executor_kwargs,
-    instructions="""
-        你是一个本地工作的多模态agent，无法在网络搜索资料，只能利用本地的工具完成任务；
-        利用本地工具，通过编排、规划，将复杂逻辑编码为python代码，快速完成任务。
-    """,
-)
+    with langfuse.start_as_current_observation(as_type="span", name="user-request") as root_span:
+        # Copy files from local to virtual backend
+        file_paths = []
+        for path in files:
+            dest_path = os.path.join(os.path.dirname(__file__), "dist", os.path.basename(path))
+            virtual_path = os.path.join("/dist", os.path.basename(path))
+            file_paths.append(virtual_path)
+            shutil.copy(path, dest_path)
+        msg = text + (f"\nYou have been provided with these files: {file_paths}" if len(file_paths) > 0 else "")
+        root_span.update(input={"text": text, "files": files, "msg": msg})
 
-root_agent = CodeAgent(
-    additional_authorized_imports=["*"],
-    managed_agents=[websearch_agent, webbrowser_agent, local_agent],
-    tools=file_tools,
-    add_base_tools=True,
-    skills=skills,
-    model=model,
-    name="工作流",
-    description="Agent管理者",
-    executor_kwargs=executor_kwargs,
-    instructions="""
-        你是一个管理者，手下有支持多模态的agents，你可以统筹它们来回答用户的问题，注意回答时请始终保持中文。
-        你可以创建多个agent来并行执行不同的任务，另一方面这也有助于控制成本，避免一个agent上下文过长。
+        last_source = ""
+        last_tool = ""
+        response = ""
 
-        通过将复杂查询分解为子问题、执行迭代搜索并综合得出全面答案，执行多步骤深度研究。
-        要对收集的资料来源进行追踪和引用管理，对不同信息来源使用不同置信度，
-        汇总完子代理的研究成果后，综合成连贯的答案，最好生成数据分析的代码执行。具体步骤如下：
-        1. 将模糊问题拆解为可执行的子问题，有需要的话创建一个子agent，检索该问题下的多个子主题；
-        2. 根据不同的主题，创建不同的agents，并行收集资料，要求agents返回资料和引用来源；
-        3. 根据中间的搜索结果，动态调整搜索策略和agents行为，增加或减少agent等；
-        4. 对每个主题的资料进行整理，进行时间线梳理与因果推断等，合并重复的内容，检测并解决冲突，以置信度高的资料为主；
-        5. 汇总完成后，根据主题生成不同层级的摘要、内容；
-        6. 为了方便理解，尽可能使用结构化输出（表格、时间轴），展示具体数据分析。
-    """,
-)
+        active_tools = {}
+
+        try:
+            for chunk in agent.stream(
+                {"messages": history + [{"role": "user", "content": msg}]},
+                stream_mode=["updates", "messages", "custom"],
+                subgraphs=True,
+                version="v2",
+            ):
+                source = "main agent" if not chunk["ns"] else chunk["ns"][-1]
+                with open(os.path.join(os.path.dirname(__file__), "memories/log.json"), "a") as f:
+                    f.write(str(chunk["ns"]))
+                    f.write("\n")
+                    f.write(str(chunk["type"]))
+                    f.write("\n")
+                    f.write(str(chunk["data"]))
+                    f.write("\n")
+                # if source != last_source:
+                #     parent = log_source[-1] if len(log_source) > 0 else root_span
+                #     log_source.append(parent.start_as_current_observation(as_type="agent", name=source))
+                #     last_source = source
+
+                # logger update
+                if chunk["type"] == "updates":
+                    for node_name, data in chunk["data"].items():
+                        if node_name not in INTERESTING_NODES:
+                            langfuse.start_observation(as_type="chain", name=node_name, metadata=data).end()
+
+                        # ─── Phase 1: Detect subagent starting ────────────────────────
+                        # When the main agent's model_request contains task tool calls,
+                        # a subagent has been spawned.
+                        if node_name == "model":
+                            for msg in data.get("messages", []):
+                                # message
+                                if isinstance(msg, AIMessage):
+                                    langfuse.start_as_current_observation(
+                                        as_type="generation",
+                                        name="LLM generate",
+                                        metadata=msg.response_metadata,
+                                        usage_details={
+                                            "input": msg.usage_metadata.get("input_tokens", 0),
+                                            "output": msg.usage_metadata.get("output_tokens", 0),
+                                            "total": msg.usage_metadata.get("total_tokens", 0),
+                                            "cache_read_input_tokens": msg.usage_metadata.get("input_token_details", {}).get("cache_read", 0)
+                                        }
+                                    )
+
+                                # tool calls
+                                for tc in getattr(msg, "tool_calls", []):
+                                    active_tools[tc["id"]] = langfuse.start_as_current_observation(
+                                        as_type="tool",
+                                        name=tc["name"],
+                                        input=tc["args"],
+                                    )
+
+                        # # ─── Phase 2: Detect subagent running ─────────────────────────
+                        # # When we receive events from a tools:UUID namespace, that
+                        # # subagent is actively executing.
+                        # if chunk["ns"] and chunk["ns"][0].startswith("tools:"):
+                        #     pregel_id = chunk["ns"][0].split(":")[1]
+                        #     # Check if any pending subagent needs to be marked running.
+                        #     # Note: the pregel task ID differs from the tool_call_id,
+                        #     # so we mark any pending subagent as running on first subagent event.
+                        #     for sub_id, sub in active_tools.items():
+                        #         if sub["status"] == "pending":
+                        #             sub["status"] = "running"
+                        #             print(
+                        #                 f'[lifecycle] RUNNING  → subagent "{sub["type"]}" '
+                        #                 f"(pregel: {pregel_id})"
+                        #             )
+                        #             break
+
+                        # ─── Phase 3: Detect subagent completing ──────────────────────
+                        # When the main agent's tools node returns a tool message,
+                        # the subagent has completed and returned its result.
+                        if node_name == "tools":
+                            for msg in data.get("messages", []):
+                                # tool results
+                                if isinstance(msg, ToolMessage):
+                                    subtool = active_tools.pop(msg.tool_call_id, None)
+                                    if subtool:
+                                        subtool.update(output=msg.content)
+                                        subtool.end()
+                                    else:
+                                        print(f"Warning: Subtool {msg.tool_call_id} not found in active_tools.")
+                                        print(msg)
+
+                        # root_span.update(output={source: response + node_name})
+
+                # user interface update
+                elif chunk["type"] == "messages":
+                    token, metadata = chunk["data"]
+
+                    with langfuse.start_as_current_observation(as_type="tool", name="Tool Call", metadata=metadata) as tool:
+                        if hasattr(token, 'tool_call_chunks'):
+                            for tc in token.tool_call_chunks:
+                                if tc.get("name") and len(tc['name']) > 0:
+                                    last_tool = tc['name']
+                                    tool.update(input={last_tool: ""})
+                                if tc.get("args"):
+                                    tool.update(input={last_tool: tool.input.get(last_tool, "") + tc["args"]})
+
+                        if token.type == "tool":
+                            tool.update(output={token.name: token.content})
+
+                    if isinstance(token, AIMessage) and token.content and len(token.tool_call_chunks) == 0:
+                        with langfuse.start_as_current_observation(as_type="generation", name=source) as ge:
+                            response += token.content
+                            ge.update(output=response)
+                        root_span.update(output={source: response})
+
+                # custom event
+                elif chunk["type"] == "custom":
+                    langfuse.start_observation(as_type="event", name=source, metadata=chunk["data"]).end()
+
+                # yield response
+
+            for tool_id, subtool in active_tools.items():
+                print(f"Warning: Subtool {tool_id} still in active_tools.")
+                subtool.end()
+
+        except Exception as e:
+            yield str(e)
+
+
+
+# webbrowser_agent = CodeAgent(
+#     additional_authorized_imports=["helium"],
+#     tools=browser_tools + file_tools,
+#     add_base_tools=True,
+#     skills=skills,
+#     model=model,
+#     step_callbacks=[save_screenshot],
+#     name="webbrowser_agent",
+#     description="网页浏览者",
+#     executor_kwargs=executor_kwargs,
+#     verbosity_level=2,
+#     instructions=helium_instructions + """
+#         你是一个浏览器控制的多模态agent，你可以使用BrowserTool来浏览当前页面、搜索文本、关闭弹窗，返回上一页等；
+#         注意：浏览超出屏幕的内容时，优先使用scale_down而不是滚动窗口，只有当scale_down缩小的内容你无法识别时，才考虑滚动窗口；
+#         还有不要忘了helium，它为你提供了更多页面操作。
+#     """,
+# )
+# webbrowser_agent.python_executor("from helium import *")
