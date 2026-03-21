@@ -24,4 +24,4 @@ def create_app():
 
 if __name__ == "__main__":
     demo = create_app()
-    demo.launch(share=False, server_name="0.0.0.0", server_port=8100)
+    demo.launch(share=False, server_name="0.0.0.0", server_port=8080)

@@ -8,6 +8,7 @@ services:
     image: myworkflow:latest
     build: .
     restart: always
+    user: appuser
     ports:
       - 8080:8080
     environment:
@@ -16,7 +17,7 @@ services:
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-http://localhost:3000}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-http://langfuse-web:3000}
     depends_on:
       - langfuse-worker
 

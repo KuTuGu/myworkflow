@@ -1,17 +1,21 @@
-FROM ubuntu:22.04
+FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
 
-RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    cp /root/.local/bin/uv /usr/local/bin/uv
 
-RUN pip install uv
+RUN useradd -m -s /bin/bash appuser && \
+    mkdir -p /app && \
+    chown appuser:appuser /app
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN uv sync
+USER appuser
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync && \
+    uv run playwright install chromium
 
 COPY . .
 
-CMD ["uv", "run", "--env-file",  ".env", "src/main.py"]
+CMD ["uv", "run", "--env-file", ".env", "src/main.py"]
