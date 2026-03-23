@@ -11,11 +11,9 @@ WORKDIR /app
 
 USER appuser
 
-COPY pyproject.toml uv.lock ./
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
 
-RUN uv sync && \
+RUN uv sync --frozen && \
     uv run playwright install chromium
 
-COPY . .
-
-CMD ["uv", "run", "--env-file", ".env", "src/main.py"]
+COPY --chown=appuser:appuser . .

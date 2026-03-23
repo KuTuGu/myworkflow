@@ -6,11 +6,10 @@
 services:
   myworkflow:
     image: myworkflow:latest
+    container_name: DeepAgent
     build: .
-    restart: always
     user: appuser
-    ports:
-      - 8080:8080
+    command: sleep infinity
     environment:
       MODEL_URL: ${MODEL_URL:-}
       MODEL_MODEL: ${MODEL_MODEL:-}
@@ -18,6 +17,11 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-http://langfuse-web:3000}
+      DATABASE_URL_CHECKPOINTER: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_CHECKPOINTER}
+      DATABASE_URL_STORE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_STORE}
+      DATABASE_URL_HISTORY: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_HISTORY}
+    volumes:
+      - .:/workspace
     depends_on:
       - langfuse-worker
 
@@ -37,7 +41,7 @@ services:
       - 127.0.0.1:3030:3030
     environment: &langfuse-worker-env
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/postgres} # CHANGEME
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       SALT: ${SALT:-mysalt} # CHANGEME
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000} # CHANGEME: generate via `openssl rand -hex 32`
       TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
@@ -179,3 +183,4 @@ services:
       - 127.0.0.1:5432:5432
     volumes:
       - ${POSTGRES_DATA_PATH:-./logs/postgres}:/var/lib/postgresql/data
+      - ./.postgres-scripts:/docker-entrypoint-initdb.d
