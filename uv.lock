@@ -422,7 +422,7 @@ wheels = [
 [[package]]
 name = "deepagents-acp"
 version = "0.0.4"
-source = { git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=main#ff3e50bb87dbca7fd57d7f912bc4ac1d056b9010" }
+source = { git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=feature%2Facp-logger#70c4e7f237e7dbb57c0fd093028b38030786ae41" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "deepagents" },
@@ -1189,7 +1189,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "ddgs", specifier = ">=9.11.4" },
     { name = "deepagents", specifier = ">=0.4.11" },
-    { name = "deepagents-acp", git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=main" },
+    { name = "deepagents-acp", git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=feature%2Facp-logger" },
     { name = "langchain-community", specifier = ">=0.4.1" },
     { name = "langchain-openai", specifier = ">=1.1.11" },
     { name = "langfuse", specifier = ">=4.0.1" },

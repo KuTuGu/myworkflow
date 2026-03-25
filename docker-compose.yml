@@ -11,6 +11,7 @@ services:
     user: appuser
     command: sleep infinity
     environment:
+      WORKSPACE: ${WORKSPACE:-/workspace}
       MODEL_URL: ${MODEL_URL:-}
       MODEL_MODEL: ${MODEL_MODEL:-}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
@@ -21,7 +22,7 @@ services:
       DATABASE_URL_STORE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_STORE}
       DATABASE_URL_HISTORY: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_HISTORY}
     volumes:
-      - .:/workspace
+      - .:${WORKSPACE:-/workspace}
     depends_on:
       - langfuse-worker
 

@@ -19,4 +19,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-deepagents-acp = { git = "https://github.com/KuTuGu/deepagents.git", subdirectory = "libs/acp", rev = "main" }
+deepagents-acp = { git = "https://github.com/KuTuGu/deepagents.git", subdirectory = "libs/acp", rev = "feature/acp-logger" }
