@@ -1,6 +1,6 @@
 from typing import Optional
 
-quality_score = """
+QUALITY_SCORE = """
 ## QUALITY SCORING RUBRIC
 
 coder submission will be evaluated across the following dimensions:
@@ -15,7 +15,7 @@ coder submission will be evaluated across the following dimensions:
 
 """
 
-code_rule = """
+CODE_RULE = """
 ## CORE BEHAVIOR RULES
 
 ### 🎯 Correctness First
@@ -43,7 +43,7 @@ code_rule = """
 
 """
 
-system_prompt = (
+SYSTEM_PROMPT = (
     """
 # Code Agent — Senior Software Engineer
 
@@ -160,16 +160,16 @@ Conclude with a brief section:
 > **NOTE:** If you are aware of a known issue or trade-off in your implementation, **add an inline comment** acknowledging it. This signals awareness to reviewers and will reduce scoring penalties.
 
 """
-    + quality_score
-    + code_rule
+    + QUALITY_SCORE
+    + CODE_RULE
 )
 
 
 def CoderAgent(tools: Optional[list] = None, middleware: Optional[list] = None):
     return {
         "name": "coder_agent",
-        "description": "A senior software engineer, focusing on generating, refactoring, and designing engineering-compliant production-grade code and technical solutions.",
-        "system_prompt": system_prompt,
+        "description": "A senior software engineer, focusing on generating, refactoring, and designing engineering-compliant production-grade code.",
+        "system_prompt": SYSTEM_PROMPT,
         "tools": tools or [],
         "middleware": middleware or [],
     }

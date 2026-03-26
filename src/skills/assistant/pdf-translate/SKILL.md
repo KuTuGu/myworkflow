@@ -1,12 +1,7 @@
 ---
 name: pdf-translate
-description: Use PDFMathTranslate (pdf2zh) to translate PDF documents while preserving layouts, 
-formulas, charts, and tables. Supports multiple translation services including 
-LLM-based services like OpenAI, Ollama, DeepSeek, etc.
+description: Use PDFMathTranslate (pdf2zh) to translate PDF documents while preserving layouts, formulas, charts, and tables. Supports multiple translation services including LLM-based services like OpenAI, Ollama, DeepSeek, etc.
 ---
-
-Scientific PDF document translation preserving layouts.
-
 
 ## Install
 

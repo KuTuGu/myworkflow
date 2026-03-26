@@ -8,8 +8,9 @@ class LangfuseLogger(Logger):
     def __init__(self):
         super().__init__()
         self.langfuse = get_client()
-        self.active_contexts = {}
-        self.last_context = None
+        self.active_agents = {}
+        self.active_observations = {}
+        self.last_agent: Any = None
 
     def _on_start(
         self,
@@ -20,28 +21,16 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        if type == "agent" or type == "tool" or type == "guardrail":
-            observation = self.last_context.start_observation(
-                as_type=type,
-                name=name,
-                input=input,
-                output=output,
-                metadata=metadata,
-            )
-            self.active_contexts[id] = {
-                "parent": self.last_context,
-                "value": observation,
-            }
-            self.last_context = observation
-
-        else:
-            self.last_context.start_observation(
-                as_type=type,
-                name=name,
-                input=input,
-                output=output,
-                metadata=metadata,
-            ).end()
+        self.active_observations[id] = self.last_agent.start_observation(
+            as_type=type,
+            name=name,
+            input=input,
+            output=output,
+            metadata=metadata,
+        )
+        if not (type == "tool" or type == "guardrail"):
+            observation = self.active_observations.pop(id)
+            observation.end()
 
     def _on_end(
         self,
@@ -51,10 +40,7 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        context = self.active_contexts.pop(id)
-        self.last_context = context["parent"]
-        observation = context["value"]
-
+        observation = self.active_observations.pop(id)
         observation.update(
             name=name,
             input=input,
@@ -63,7 +49,7 @@ class LangfuseLogger(Logger):
         )
         observation.end()
 
-    def on_agent_start(
+    def _on_agent_start(
         self,
         id: str,
         name: Optional[str] = None,
@@ -71,20 +57,22 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        self.last_context = self.langfuse
-        self._on_start(
-            id=id,
-            type="agent",
+        observation_ctx = self.langfuse.start_as_current_observation(
+            as_type="agent",
             name=name,
             input=input,
             output=output,
             metadata=metadata,
         )
-        self.last_context._otel_span.set_attribute(
-            LangfuseOtelSpanAttributes.AS_ROOT, True
-        )
+        observation = observation_ctx.__enter__()
+        self.active_agents[id] = {
+            "name": name,
+            "observation": observation,
+            "observation_ctx": observation_ctx,
+        }
+        self.last_agent = observation
 
-    def on_agent_end(
+    def _on_agent_end(
         self,
         id: str,
         name: Optional[str] = None,
@@ -92,11 +80,42 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        self._on_end(
+        agent = self.active_agents.pop(id)
+        agent["observation"].update(
+            name=agent["name"],
+            input=input,
+            output=output,
+            metadata=metadata,
+        )
+        agent["observation_ctx"].__exit__(None, None, None)
+
+    def on_request_start(
+        self,
+        id: str,
+        name: Optional[str] = None,
+        input: Optional[Any] = None,
+        output: Optional[Any] = None,
+        metadata: Optional[Any] = None,
+    ) -> None:
+        self.llm_output = ""
+        self._on_agent_start(id, name, input, output, metadata)
+        self.last_agent._otel_span.set_attribute(
+            LangfuseOtelSpanAttributes.AS_ROOT, True
+        )
+
+    def on_request_end(
+        self,
+        id: str,
+        name: Optional[str] = None,
+        input: Optional[Any] = None,
+        output: Optional[Any] = None,
+        metadata: Optional[Any] = None,
+    ) -> None:
+        self._on_agent_end(
             id=id,
             name=name,
             input=input,
-            output=output,
+            output=self.llm_output,
             metadata=metadata,
         )
 
@@ -120,11 +139,12 @@ class LangfuseLogger(Logger):
         name: Optional[str] = None,
         model: Optional[str] = None,
         input: Optional[Any] = None,
-        output: Optional[Any] = None,
+        output: Optional[str] = None,
         metadata: Optional[Any] = None,
         usage_details: Optional[UsageDetail] = None,
     ) -> None:
-        self.last_context.start_observation(
+        self.llm_output += output or ""
+        self.last_agent.start_observation(
             as_type="generation",
             name=name,
             model=model,
@@ -142,14 +162,29 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        self._on_start(
-            id=id,
-            type="tool",
-            name=name,
-            input=input,
-            output=output,
-            metadata=metadata,
-        )
+        if name == "task":
+            subagent_name = metadata["args"]["subagent_type"]
+            self.llm_output += (
+                f"\n<SubAgent Invoke>{subagent_name}: {input}<SubAgent Invoke>\n"
+            )
+            self._on_agent_start(
+                id=id,
+                name=subagent_name,
+                input=input,
+                output=output,
+                metadata=metadata,
+            )
+
+        else:
+            self.llm_output += f"\n<Tool Call>{name}: {input}<Tool Call>\n"
+            self._on_start(
+                id=id,
+                type="tool",
+                name=name,
+                input=input,
+                output=output,
+                metadata=metadata,
+            )
 
     def on_tool_end(
         self,
@@ -159,13 +194,28 @@ class LangfuseLogger(Logger):
         output: Optional[Any] = None,
         metadata: Optional[Any] = None,
     ) -> None:
-        self._on_end(
-            id=id,
-            name=name,
-            input=input,
-            output=output,
-            metadata=metadata,
-        )
+        if id in self.active_agents:
+            agent = self.active_agents[id]
+            self.llm_output += (
+                f"\n<SubAgent Result>{agent['name']}: {output}<SubAgent Result>\n"
+            )
+            self._on_agent_end(
+                id=id,
+                name=agent["name"],
+                input=input,
+                output=output,
+                metadata=metadata,
+            )
+
+        else:
+            self.llm_output += f"\n<Tool Result>{name}: {output}<Tool Result>\n"
+            self._on_end(
+                id=id,
+                name=name,
+                input=input,
+                output=output,
+                metadata=metadata,
+            )
 
     def on_interrupt_start(
         self,

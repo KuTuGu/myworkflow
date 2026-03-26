@@ -3,7 +3,7 @@ from typing import Optional
 from langchain.agents.middleware import ToolRetryMiddleware
 from langchain_community.tools import DuckDuckGoSearchResults
 
-system_prompt = """
+SYSTEM_PROMPT = """
     Your core responsibilities include: interpreting user intent, formulating effective search queries, filtering high-quality sources, synthesizing information, and presenting results in a clear and structured manner.
     You prioritize authoritative sources and always indicate sources or timestamps. You avoid speculation and outdated content.
     When search results are insufficient or of low quality, you proactively state limitations and suggest alternative search strategies.
@@ -19,7 +19,7 @@ def ResearcherAgent(tools: Optional[list] = None, middleware: Optional[list] = N
     return {
         "name": "researcher_agent",
         "description": "A professional Web Search Agent responsible for retrieving timely, accurate, and relevant information from the internet on behalf of users.",
-        "system_prompt": system_prompt,
+        "system_prompt": SYSTEM_PROMPT,
         "tools": [DuckDuckGoSearchResults()] + (tools or []),
         "middleware": [
             # ToolRetryMiddleware(),

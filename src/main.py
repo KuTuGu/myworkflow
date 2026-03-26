@@ -9,7 +9,7 @@ from deepagents_acp.server import AgentServerACP, AgentSessionContext
 from langchain.agents.middleware import (
     ClearToolUsesEdit,
     ContextEditingMiddleware,
-    ToolCallLimitMiddleware,
+    ModelCallLimitMiddleware,
 )
 from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
 from langchain_openai import ChatOpenAI
@@ -88,7 +88,6 @@ async def main() -> None:
     toolkit = PlayWrightBrowserToolkit.from_browser(async_browser=async_browser)
     browser_tools = toolkit.get_tools()
 
-    tool_call_limit_middleware = ToolCallLimitMiddleware(run_limit=10)
     context_edit_middleware = ContextEditingMiddleware(
         edits=[
             ClearToolUsesEdit(
@@ -97,13 +96,14 @@ async def main() -> None:
             ),
         ],
     )
+    model_call_limit_middleware = ModelCallLimitMiddleware(run_limit=20)
 
     def build_agent(context: AgentSessionContext) -> CompiledStateGraph:
         """Agent factory based in the given root directory."""
         interrupt_config = interrupt_config_by_mode(context.mode)
 
         return create_deep_agent(
-            name="llm",
+            name="main-agent",
             model=model,
             backend=backend,
             skills=["./src/skills/assistant"],
@@ -111,29 +111,35 @@ async def main() -> None:
             interrupt_on=interrupt_config,
             checkpointer=checkpointer,
             memory=["./src/memories/AGENTS.md"],
-            middleware=[context_edit_middleware],
+            middleware=[context_edit_middleware, model_call_limit_middleware],
             subagents=[
                 ReaderAgent(
                     tools=browser_tools,
-                    middleware=[
-                        context_edit_middleware,
-                        tool_call_limit_middleware,
-                    ],
+                    middleware=[context_edit_middleware, model_call_limit_middleware],
                 ),
                 ResearcherAgent(
                     tools=browser_tools,
-                    middleware=[context_edit_middleware, tool_call_limit_middleware],
+                    middleware=[context_edit_middleware, model_call_limit_middleware],
                 ),
-                CoderAgent(middleware=[context_edit_middleware]),
-                ReviewerAgent(middleware=[context_edit_middleware]),
-                TesterAgent(middleware=[context_edit_middleware]),
-                PromptOptimizerAgent(middleware=[context_edit_middleware]),
+                CoderAgent(
+                    middleware=[context_edit_middleware, model_call_limit_middleware]
+                ),
+                ReviewerAgent(
+                    middleware=[context_edit_middleware, model_call_limit_middleware]
+                ),
+                TesterAgent(
+                    middleware=[context_edit_middleware, model_call_limit_middleware]
+                ),
+                PromptOptimizerAgent(
+                    middleware=[context_edit_middleware, model_call_limit_middleware]
+                ),
             ],
             system_prompt="""
                 You are user's senior assistant, managing a team of graduate student subagents who specialize in different domains and tasks.
-                Your do NOT perform complex tasks yourself. Instead, you coordinate and manage the team to achieve the user’s goals efficiently.
+                Your do NOT perform ANY tasks yourself. Instead, you coordinate and manage the team to achieve the user’s goals efficiently.
                 You act as a coordinator and quality controller, ensuring each subagent’s work aligns with the overall goal and meets high standards.
-                Your responsibilities are: 1. **Understand the user's request** — clarify the goal, scope, and constraints.
+                Your responsibilities are:
+                1. **Understand the user's request** — clarify the goal, scope, and constraints.
                 2. **Decompose complex tasks** — break down the request into discrete, executable subtasks.
                 3. **Delegate to subagents** — assign each subtask to the most appropriate subagent based on their expertise.
                 4. **Synthesize results** — combine the outputs from subagents into a coherent, well-structured final response.

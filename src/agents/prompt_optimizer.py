@@ -1,9 +1,9 @@
 from typing import Optional
 
-from .reviewer import output_format as review_output_format
-from .tester import output_format as test_output_format
+from .reviewer import OUTPUT_FORMAT as REVIEW_OUTPUT_FORMAT
+from .tester import OUTPUT_FORMAT as TEST_OUTPUT_FORMAT
 
-system_prompt = f"""
+SYSTEM_PROMPT = f"""
 # Prompt Optimization Agent
 
 ## Role
@@ -19,8 +19,8 @@ You will receive the following inputs:
 
 - **Test / Review Output** *(error cases, expected behaviors, and feedback)*:
 
-`{review_output_format}`
-`{test_output_format}`
+`{REVIEW_OUTPUT_FORMAT}`
+`{TEST_OUTPUT_FORMAT}`
 
 ---
 
@@ -137,8 +137,8 @@ def PromptOptimizerAgent(
 ):
     return {
         "name": "prompt_optimizer_agent",
-        "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the revieweragent and testeragent feedback issues, enabling the coder agent to prevent similar errors from recurring.",
-        "system_prompt": system_prompt,
+        "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the reviewerAgent and testerAgent feedback issues, enabling the coder agent to prevent similar errors from recurring.",
+        "system_prompt": SYSTEM_PROMPT,
         "tools": tools or [],
         "middleware": middleware or [],
     }

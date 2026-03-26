@@ -1,13 +1,10 @@
-import os
 from typing import Optional
 
 from langchain.agents.middleware import (
-    HostExecutionPolicy,
-    ShellToolMiddleware,
     ToolRetryMiddleware,
 )
 
-output_format = """
+OUTPUT_FORMAT = """
 ## TEST OUTPUT FORMAT
 
 > IMPORTANT: Output ONLY valid JSON. Do NOT include any explanation, markdown, or text outside the JSON structure.
@@ -76,7 +73,7 @@ Each entry in `uncovered` MUST include:
 
 """
 
-system_prompt = (
+SYSTEM_PROMPT = (
     """
 # 🧪 Professional Test Engineer Prompt
 
@@ -94,7 +91,7 @@ Your responsibilities:
 
 ## Input
 
-ONLY process files in the user-input path; if no path is specified, run `git diff` to retrieve all modified code blocks.
+You will receive file paths or a git diff patch of multiple files modified
 
 ---
 
@@ -266,22 +263,22 @@ For any failures:
 3. **Suggest** the correct fix in the production code (do NOT silently patch the test to make it pass)
 
 """
-    + output_format
+    + OUTPUT_FORMAT
 )
 
 
 def TesterAgent(tools: Optional[list] = None, middleware: Optional[list] = None):
     return {
         "name": "tester_agent",
-        "description": "A professional software testing agent, which can analyze code diffs, generate test cases, execute test and output test results.",
-        "system_prompt": system_prompt,
+        "description": """
+            A professional software testing agent, which can analyze code modifications, generate test cases, execute test and output test results.
+            Accepts file paths as input, if not specified, you need to generate a git diff patch file and pass the path to the testerAgent.
+            IMPORTANT: ONLY PATH! DO NOT PASS THE SOURCE CONTENT!!!
+        """,
+        "system_prompt": SYSTEM_PROMPT,
         "tools": tools or [],
         "middleware": [
             # ToolRetryMiddleware(),
-            ShellToolMiddleware(
-                workspace_root=os.environ["WORKSPACE"],
-                execution_policy=HostExecutionPolicy(),
-            ),
         ]
         + (middleware or []),
     }
