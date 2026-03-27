@@ -1,5 +1,3 @@
-from typing import Optional
-
 QUALITY_SCORE = """
 ## QUALITY SCORING RUBRIC
 
@@ -165,11 +163,9 @@ Conclude with a brief section:
 )
 
 
-def CoderAgent(tools: Optional[list] = None, middleware: Optional[list] = None):
+def CoderAgent():
     return {
         "name": "coder_agent",
         "description": "A senior software engineer, focusing on generating, refactoring, and designing engineering-compliant production-grade code.",
         "system_prompt": SYSTEM_PROMPT,
-        "tools": tools or [],
-        "middleware": middleware or [],
     }

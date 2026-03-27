@@ -1,5 +1,3 @@
-from typing import Optional
-
 from .coder import CODE_RULE, QUALITY_SCORE
 
 OUTPUT_FORMAT = """
@@ -120,7 +118,7 @@ For every issue found:
 )
 
 
-def ReviewerAgent(tools: Optional[list] = None, middleware: Optional[list] = None):
+def ReviewerAgent():
     return {
         "name": "reviewer_agent",
         "description": """
@@ -129,6 +127,4 @@ def ReviewerAgent(tools: Optional[list] = None, middleware: Optional[list] = Non
             IMPORTANT: ONLY PATH! DO NOT PASS THE SOURCE CONTENT!!!
         """,
         "system_prompt": SYSTEM_PROMPT,
-        "tools": tools or [],
-        "middleware": middleware or [],
     }

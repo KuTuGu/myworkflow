@@ -1,17 +1,27 @@
 import asyncio
 import os
+from typing import Optional
 
 from acp import run_agent
 from acp.schema import SessionMode, SessionModeState
-from deepagents import create_deep_agent
-from deepagents.backends import LocalShellBackend
+from deepagents import CompiledSubAgent
+from deepagents.backends import StoreBackend
+from deepagents.middleware.memory import MemoryMiddleware
+from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
+from deepagents.middleware.skills import SkillsMiddleware
+from deepagents.middleware.subagents import SubAgentMiddleware
+from deepagents.middleware.summarization import create_summarization_middleware
 from deepagents_acp.server import AgentServerACP, AgentSessionContext
+from langchain.agents import create_agent
 from langchain.agents.middleware import (
     ClearToolUsesEdit,
     ContextEditingMiddleware,
+    HumanInTheLoopMiddleware,
     ModelCallLimitMiddleware,
+    TodoListMiddleware,
 )
 from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
+from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -26,6 +36,7 @@ from agents import (
     ReviewerAgent,
     TesterAgent,
 )
+from executor import PYTHON_EXECUTOR_PROMPT, PythonExecutorMiddleware
 from logger import LangfuseLogger
 
 workspace = os.environ["WORKSPACE"]
@@ -68,13 +79,6 @@ async def main() -> None:
         api_key=api_key,
     )
 
-    backend = LocalShellBackend(
-        root_dir=workspace,
-        inherit_env=True,
-        virtual_mode=False,
-        env=os.environ.copy(),
-    )
-
     store_ctx = AsyncPostgresStore.from_conn_string(database_url_store)
     store = await store_ctx.__aenter__()
     await store.setup()
@@ -88,55 +92,94 @@ async def main() -> None:
     toolkit = PlayWrightBrowserToolkit.from_browser(async_browser=async_browser)
     browser_tools = toolkit.get_tools()
 
-    context_edit_middleware = ContextEditingMiddleware(
-        edits=[
-            ClearToolUsesEdit(
-                trigger=50000,
-                clear_tool_inputs=True,
-            ),
-        ],
-    )
-    model_call_limit_middleware = ModelCallLimitMiddleware(run_limit=20)
+    backend = lambda rt: StoreBackend(rt)
+    base_middlewares = [
+        TodoListMiddleware(),
+        ContextEditingMiddleware(
+            edits=[
+                ClearToolUsesEdit(
+                    trigger=50000,
+                    clear_tool_inputs=True,
+                ),
+            ],
+        ),
+        ModelCallLimitMiddleware(run_limit=20),
+        create_summarization_middleware(model, backend),
+        PatchToolCallsMiddleware(),
+    ]
+
+    def build_subagent(
+        metadata: dict,
+        tools: Optional[list] = None,
+        middleware: Optional[list] = None,
+    ) -> dict:
+        middlewares = []
+        if "skills" in metadata:
+            middlewares.extend(
+                SkillsMiddleware(backend=backend, sources=metadata["skills"])
+            )
+        if "memories" in metadata:
+            middlewares.extend(
+                MemoryMiddleware(backend=backend, sources=metadata["memories"])
+            )
+
+        agent = create_agent(
+            name=metadata["name"],
+            model=model,
+            tools=(tools or []),
+            middleware=middlewares + (middleware or []),
+            checkpointer=checkpointer,
+            store=store,
+            system_prompt=PYTHON_EXECUTOR_PROMPT + metadata["system_prompt"],
+        )
+
+        return CompiledSubAgent(
+            name=metadata["name"],
+            description=metadata["description"],
+            runnable=agent,
+        )
 
     def build_agent(context: AgentSessionContext) -> CompiledStateGraph:
         """Agent factory based in the given root directory."""
         interrupt_config = interrupt_config_by_mode(context.mode)
+        base_middlewares.extend(HumanInTheLoopMiddleware(interrupt_on=interrupt_config))
 
-        return create_deep_agent(
+        agent = create_agent(
             name="main-agent",
             model=model,
-            backend=backend,
-            skills=["./src/skills/assistant"],
-            store=store,
-            interrupt_on=interrupt_config,
-            checkpointer=checkpointer,
-            memory=["./src/memories/AGENTS.md"],
-            middleware=[context_edit_middleware, model_call_limit_middleware],
-            subagents=[
-                ReaderAgent(
-                    tools=browser_tools,
-                    middleware=[context_edit_middleware, model_call_limit_middleware],
+            middleware=base_middlewares
+            + [
+                SkillsMiddleware(backend=backend, sources=["./src/skills/assistant"]),
+                MemoryMiddleware(backend=backend, sources=["./src/memories/"]),
+                SubAgentMiddleware(
+                    backend=backend,
+                    subagents=[
+                        build_subagent(
+                            ReaderAgent(),
+                            tools=[DuckDuckGoSearchResults()] + browser_tools,
+                            middleware=base_middlewares,
+                        ),
+                        build_subagent(
+                            ResearcherAgent(),
+                            tools=[DuckDuckGoSearchResults()] + browser_tools,
+                            middleware=base_middlewares,
+                        ),
+                        build_subagent(CoderAgent(), middleware=base_middlewares),
+                        build_subagent(ReviewerAgent(), middleware=base_middlewares),
+                        build_subagent(TesterAgent(), middleware=base_middlewares),
+                        build_subagent(
+                            PromptOptimizerAgent(), middleware=base_middlewares
+                        ),
+                    ],
                 ),
-                ResearcherAgent(
-                    tools=browser_tools,
-                    middleware=[context_edit_middleware, model_call_limit_middleware],
-                ),
-                CoderAgent(
-                    middleware=[context_edit_middleware, model_call_limit_middleware]
-                ),
-                ReviewerAgent(
-                    middleware=[context_edit_middleware, model_call_limit_middleware]
-                ),
-                TesterAgent(
-                    middleware=[context_edit_middleware, model_call_limit_middleware]
-                ),
-                PromptOptimizerAgent(
-                    middleware=[context_edit_middleware, model_call_limit_middleware]
-                ),
+                PythonExecutorMiddleware(),
             ],
-            system_prompt="""
+            checkpointer=checkpointer,
+            store=store,
+            system_prompt=PYTHON_EXECUTOR_PROMPT
+            + """
                 You are user's senior assistant, managing a team of graduate student subagents who specialize in different domains and tasks.
-                Your do NOT perform ANY tasks yourself. Instead, you coordinate and manage the team to achieve the user’s goals efficiently.
+                Your do NOT perform ANY complex tasks yourself. Instead, you coordinate and manage the team to achieve the user’s goals efficiently.
                 You act as a coordinator and quality controller, ensuring each subagent’s work aligns with the overall goal and meets high standards.
                 Your responsibilities are:
                 1. **Understand the user's request** — clarify the goal, scope, and constraints.
@@ -146,7 +189,9 @@ async def main() -> None:
                 5. **Quality control** — review subagent outputs for accuracy, completeness, and consistency before presenting them.
                 6. **Iterate if needed** — if a subagent’s output is insufficient, refine instructions and delegate again.
             """,
-        )
+        ).with_config({"recursion_limit": 10_000})
+
+        return agent
 
     server = AgentServerACP(
         agent=build_agent,

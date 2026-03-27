@@ -1,9 +1,3 @@
-from typing import Optional
-
-from langchain.agents.middleware import (
-    ToolRetryMiddleware,
-)
-
 OUTPUT_FORMAT = """
 ## TEST OUTPUT FORMAT
 
@@ -267,7 +261,7 @@ For any failures:
 )
 
 
-def TesterAgent(tools: Optional[list] = None, middleware: Optional[list] = None):
+def TesterAgent():
     return {
         "name": "tester_agent",
         "description": """
@@ -276,9 +270,4 @@ def TesterAgent(tools: Optional[list] = None, middleware: Optional[list] = None)
             IMPORTANT: ONLY PATH! DO NOT PASS THE SOURCE CONTENT!!!
         """,
         "system_prompt": SYSTEM_PROMPT,
-        "tools": tools or [],
-        "middleware": [
-            # ToolRetryMiddleware(),
-        ]
-        + (middleware or []),
     }

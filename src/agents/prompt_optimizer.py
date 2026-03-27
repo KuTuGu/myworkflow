@@ -1,5 +1,3 @@
-from typing import Optional
-
 from .reviewer import OUTPUT_FORMAT as REVIEW_OUTPUT_FORMAT
 from .tester import OUTPUT_FORMAT as TEST_OUTPUT_FORMAT
 
@@ -132,13 +130,9 @@ Score the current version on the following dimensions (0–10 each):
 """
 
 
-def PromptOptimizerAgent(
-    tools: Optional[list] = None, middleware: Optional[list] = None
-):
+def PromptOptimizerAgent():
     return {
         "name": "prompt_optimizer_agent",
-        "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the reviewerAgent and testerAgent feedback issues, enabling the coder agent to prevent similar errors from recurring.",
+        "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the ReviewerAgent and TesterAgent feedback issues, enabling the CoderAgent to prevent similar errors from recurring.",
         "system_prompt": SYSTEM_PROMPT,
-        "tools": tools or [],
-        "middleware": middleware or [],
     }
