@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from acp import run_agent
 from acp.schema import SessionMode, SessionModeState
@@ -20,8 +20,12 @@ from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
     TodoListMiddleware,
 )
+from langchain.tools import tool
 from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
-from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.utilities import (
+    DuckDuckGoSearchAPIWrapper,
+    GoogleSerperAPIWrapper,
+)
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -50,6 +54,42 @@ database_url_store = os.environ["DATABASE_URL_STORE"]
 database_url_history = os.environ["DATABASE_URL_HISTORY"]
 
 
+@tool
+def websearch_tool(
+    query: str,
+    type: Optional[str] = "text",
+    ask: Optional[bool] = False,
+    google: Optional[bool] = True,
+    timelimit: Optional[str] = None,
+    max_results: Optional[int] = 10,
+    **kwargs,
+) -> Any:
+    """
+    web search tool.
+
+    Args:
+        query: query string.
+        type: search type. Options: Google: "news", "search", "places", "images"| DDGS: "text", "news", "images", Default "search" | "text"
+        ask: Quick question and answer, result without additional metadata. Options: bool, Default False
+        google: using google or ddgs. Options: bool, Default True
+        timelimit: Options: d, w, m, y, Default None
+        max_results: Options: int, Default 10
+        kwargs: Other args.
+    """
+    if google and os.environ.get("SERPER_API_KEY", None):
+        websearch_tool = GoogleSerperAPIWrapper(
+            type=type, tbs=timelimit, k=max_results, **kwargs
+        )
+    else:
+        websearch_tool = DuckDuckGoSearchAPIWrapper(
+            source=type, time=timelimit, max_results=max_results, **kwargs
+        )
+
+    if ask:
+        return websearch_tool.run(query)
+    return websearch_tool.results(query)
+
+
 def interrupt_config_by_mode(mode_id: str) -> dict:
     """Get interrupt configuration for a given mode."""
     mode_to_interrupt = {
@@ -58,9 +98,6 @@ def interrupt_config_by_mode(mode_id: str) -> dict:
             "write_file": {"allowed_decisions": ["approve", "reject"]},
             "edit_file": {"allowed_decisions": ["approve", "edit", "reject"]},
             "execute": {"allowed_decisions": ["approve", "reject"]},
-            "coder_agent": {"allowed_decisions": ["approve", "reject"]},
-            "tester_agent": {"allowed_decisions": ["approve", "reject"]},
-            "prompt_optimizer_agent": {"allowed_decisions": ["approve", "reject"]},
         },
         "accept_edits": {
             "execute": {"allowed_decisions": ["approve", "reject"]},
@@ -115,13 +152,14 @@ async def main() -> None:
     ) -> dict:
         middlewares = []
         if "skills" in metadata:
-            middlewares.extend(
+            middlewares.append(
                 SkillsMiddleware(backend=backend, sources=metadata["skills"])
             )
         if "memories" in metadata:
-            middlewares.extend(
+            middlewares.append(
                 MemoryMiddleware(backend=backend, sources=metadata["memories"])
             )
+        middlewares.append(PythonExecutorMiddleware())
 
         agent = create_agent(
             name=metadata["name"],
@@ -130,8 +168,8 @@ async def main() -> None:
             middleware=middlewares + (middleware or []),
             checkpointer=checkpointer,
             store=store,
-            system_prompt=PYTHON_EXECUTOR_PROMPT + metadata["system_prompt"],
-        )
+            system_prompt=metadata["system_prompt"] + PYTHON_EXECUTOR_PROMPT,
+        ).with_config({"recursion_limit": 100})
 
         return CompiledSubAgent(
             name=metadata["name"],
@@ -142,7 +180,7 @@ async def main() -> None:
     def build_agent(context: AgentSessionContext) -> CompiledStateGraph:
         """Agent factory based in the given root directory."""
         interrupt_config = interrupt_config_by_mode(context.mode)
-        base_middlewares.extend(HumanInTheLoopMiddleware(interrupt_on=interrupt_config))
+        base_middlewares.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_config))
 
         agent = create_agent(
             name="main-agent",
@@ -156,12 +194,12 @@ async def main() -> None:
                     subagents=[
                         build_subagent(
                             ReaderAgent(),
-                            tools=[DuckDuckGoSearchResults()] + browser_tools,
+                            tools=[websearch_tool] + browser_tools,
                             middleware=base_middlewares,
                         ),
                         build_subagent(
                             ResearcherAgent(),
-                            tools=[DuckDuckGoSearchResults()] + browser_tools,
+                            tools=[websearch_tool] + browser_tools,
                             middleware=base_middlewares,
                         ),
                         build_subagent(CoderAgent(), middleware=base_middlewares),
@@ -172,12 +210,10 @@ async def main() -> None:
                         ),
                     ],
                 ),
-                PythonExecutorMiddleware(),
             ],
             checkpointer=checkpointer,
             store=store,
-            system_prompt=PYTHON_EXECUTOR_PROMPT
-            + """
+            system_prompt="""
                 You are user's senior assistant, managing a team of graduate student subagents who specialize in different domains and tasks.
                 Your do NOT perform ANY complex tasks yourself. Instead, you coordinate and manage the team to achieve the user’s goals efficiently.
                 You act as a coordinator and quality controller, ensuring each subagent’s work aligns with the overall goal and meets high standards.

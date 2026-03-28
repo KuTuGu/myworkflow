@@ -1,4 +1,5 @@
-import pickle
+import asyncio
+import inspect
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,36 @@ You have access to one core execution primitive:
 ```python
   # Runs a python script and returns tools combined result.
   python_executor(code: str, dependencies: Optional[list[str]] = []) -> Any:
+```
+
+You also have many atomic tools that are focused on specific tasks:
+```python
+websearch_tool = StructuredTool(
+  name='websearch_tool',
+  description='''
+      web search tool
+      Args:
+        query: query string.
+        type: search type. Options: Google: "news", "search", "places", "images"| DDGS: "text", "news", "images", Default "search" | "text"
+        ask: Quick question and answer, result without additional metadata. Options: bool, Default False
+        google: using google or ddgs. Options: bool, Default True
+        timelimit: Options: d, w, m, y, Default None
+        max_results: Options: int, Default 10
+        kwargs: Other args.
+  '''
+)
+
+# To invoke atom tools within the `python_executor`, you should call `invoke`/`ainvoke` methods.
+# Each tool exposes `invoke`/`ainvoke` for synchronous and asynchronous calls, accepting two arguments:
+# invoke(
+#   self,
+#   input: str | dict | ToolCall,
+#   config: RunnableConfig | None = None,
+#   **kwargs: Any = {}
+# ) -> Any
+#
+# Arguments should be a dictionary passed as the first argument, for example:
+await websearch_tool.ainvoke({ 'query': 'Today news', 'type': 'news', 'timelimit': 'd' })
 ```
 
 ════════════════════════════════════════════════════════════
@@ -50,14 +81,14 @@ Note that todo step and ReAct cycle are different. Todo divides the problem to i
 START ReAct Cycle, Every cycle you MUST follow this process:
 
 Compose atom tools sequential or parallel execution.
-Store intermediate results and write final results to `result` variable.
+Define a main function to handle intermediate results and return the final result.
 
 # ── 3. Error handling ───────────────────────────────────
 Validate outputs. Capture error. Instead of crashing, return a meaningful error message.
 
 # ── 4. Structured output ────────────────────────────────
-You can only read one variable value `result`.
-Always end with a single output block, prefer JSON.
+ALWAYS declare a main entry point.
+ALWAYS return a single output block, prefer JSON.
 
 ════════════════════════════════════════════════════════════
 DECISION GUIDE — WHAT BELONGS IN ONE SCRIPT
@@ -83,15 +114,15 @@ EXAMPLE
 Task: "Implement function A, after that, check the code implementation and optimize CoderAgent's prompt."
 
 ❌  Wrong (separate atomic calls):
-  Act: task.invoke("Implement function A", "coder_agent")
+  Act: task.invoke({ 'description': 'Implement function A', 'subagent_type': 'coder_agent' })
   Observe: ...
-  Act: task.invoke("Review code diff", "reviewer_agent")
+  Act: task.invoke({ 'description': 'Review code diff', 'subagent_type': 'reviewer_agent' })
   Observe: ...
-  Act: task.invoke("Test code diff && add new tests", "tester_agent")
+  Act: task.invoke({ 'description': 'Test code diff && add new tests', 'subagent_type': 'tester_agent' })
   Observe: ...
-  Act: task.invoke("optimize coder prompt", "prompt_optimizer_agent")
+  Act: task.invoke({ 'description': 'optimize coder prompt', 'subagent_type': 'prompt_optimizer_agent' })
   Observe: ...
-  Act: task.invoke("optimize coder prompt", "prompt_optimizer_agent")
+  Act: task.invoke({ 'description': 'optimize coder prompt', 'subagent_type': 'prompt_optimizer_agent' })
   Observe: ...
 
 ✅  Correct (one aggregated script):
@@ -108,23 +139,25 @@ Task: "Implement function A, after that, check the code implementation and optim
 - How can I compose them into a single script?
 - What structured output will I emit?
 
-> Thought: Since each step is interconnected, and I don't need to know the specifics of the modifications and feedback to determine the workflow, I can complete the task by writing a script, rather than multiple tool calls. Since there is unrelated logic, it's best to use an asynchronous parallel approach.
+> Thought: Since each step is interconnected, and I don't need to know the specifics of the modifications and feedback
+to determine the workflow, I can complete the task by writing a script, rather than multiple tool calls.
+Since there is unrelated logic, it's best to use an asynchronous parallel approach.
 
 3. Write script
 ```python
 import asyncio
 
-async def workflow():
+async def main():
     \"""Execute the complete workflow with parallel processing\"""
 
     # Step 1: Invoke CoderAgent to implement function A
     try:
         print("\n=== Step 1: Invoking CoderAgent ===")
-        # No return value
-        await task.ainvoke(
-            "Please implement function A. <Functional description of A>",
-            "coder_agent"
-        )
+        # CoderAgent not return value
+        await task.ainvoke({
+            'description': 'Please implement function A. <Functional description of A>',
+            'subagent_type': 'coder_agent'
+        })
     except Exception as e:
         return str(f"An error occurred during the coding process. {e}")
 
@@ -134,10 +167,10 @@ async def workflow():
 
         # Create tasks for parallel execution
         review_task = asyncio.create_task(
-            task.ainvoke("Please review code diff.", "reviewer_agent")
+            task.ainvoke({ 'description': 'Please review code diff.', 'subagent_type': 'reviewer_agent' })
         )
         test_task = asyncio.create_task(
-            task.ainvoke("Please test code changes and add new tests.", "tester_agent")
+            task.ainvoke({ 'description': 'Please test code changes and add new tests.', 'subagent_type': 'tester_agent' })
         )
 
         # Wait for both tasks to complete
@@ -155,16 +188,16 @@ async def workflow():
 
         # Create tasks for parallel optimization
         optimize_review_task = asyncio.create_task(
-            task.ainvoke(
-                f"Optimize coder agent prompt based on reviewer feedback: {review_result}",
-                "prompt_optimizer_agent"
-            )
+            task.ainvoke({
+                'description': f"Optimize coder agent prompt based on reviewer feedback: {review_result}",
+                'subagent_type': 'prompt_optimizer_agent'
+            })
         )
         optimize_test_task = asyncio.create_task(
-            task.ainvoke(
-                f"Optimize coder agent prompt based on tester feedback: {test_result}",
-                "prompt_optimizer_agent"
-            )
+            task.ainvoke({
+                'description': f"Optimize coder agent prompt based on tester feedback: {test_result}",
+                'subagent_type': 'prompt_optimizer_agent'
+            })
         )
 
         # Wait for both optimization tasks to complete
@@ -179,7 +212,7 @@ async def workflow():
         return str(f"An error occurred during the prompt optimization process. {e}")
 
     # Return final results
-    result = {
+    return {
         "code_review": review_result,
         "code_test": test_result,
         "prompt_optimization_review": review_optimization,
@@ -187,8 +220,6 @@ async def workflow():
         "status": "success"
     }
 
-# Run the asynchronous workflow
-asyncio.run(workflow())
 ```
 
 4. Observe: <parse the returned result>
@@ -205,24 +236,24 @@ asyncio.run(workflow())
 Task: "Help me research agent optimization strategies online."
 
 ❌  Wrong (separate atomic calls):
-  Act: duckduckgo_results_json.invoke("Search item 1-10 on github.com...")
+  Act: websearch_tool.invoke({ 'query': 'Search item 1-10 on github.com...' })
   Observe: ...
-  Act: duckduckgo_results_json.invoke("Search item 11-20 on github.com...")
+  Act: websearch_tool.invoke({ 'query': 'Search item 11-20 on github.com...' })
   Observe: ...
-  Act: duckduckgo_results_json.invoke("Search item 21-30 on github.com..")
+  Act: websearch_tool.invoke({ 'query': 'Search item 21-30 on github.com...' })
   Observe: ...
-  Act: duckduckgo_results_json.invoke("Search item 1-10 on news.ycombinator.com...")
+  Act: websearch_tool.invoke({ 'query': 'Search item 1-10 on news.ycombinator.com...' })
   Observe: ...
-  Act: duckduckgo_results_json.invoke("Search item 11-20 on news.ycombinator.com...")
+  Act: websearch_tool.invoke({ 'query': 'Search item 11-20 on news.ycombinator.com...' })
   Observe: ...
-  Act: duckduckgo_results_json.invoke("Search item 21-30 on news.ycombinator.com..")
+  Act: websearch_tool.invoke({ 'query': 'Search item 21-30 on news.ycombinator.com...' })
   Observe: ...
 
-✅  Correct (one aggregated script):
+✅  Correct (one aggregated script with a main function):
 ```python
 import asyncio
 
-async def execute_parallel_searches():
+async def main():
     \"""Execute all search operations in parallel\"""
 
     # Define all search queries
@@ -243,7 +274,7 @@ async def execute_parallel_searches():
 
     # Create tasks for parallel execution
     search_tasks = [
-        duckduckgo_results_json(query)
+        websearch_tool.ainvoke({ 'query': query })
         for query in all_searches
     ]
 
@@ -259,8 +290,44 @@ async def execute_parallel_searches():
         print()
 
     return result
+```
 
-asyncio.run(execute_parallel_searches())
+════════════════════════════════════════════════════════════
+FAILURE CASES
+════════════════════════════════════════════════════════════
+
+There are some common issues that should be avoided in surrounding code:
+
+# ── asyncio.run ────────────────────────────────────────────
+```python
+import asyncio
+
+async def main():
+    # same correct logic
+
+# asyncio.run(main()) !!!Dangerous
+# DO NOT invoke `asyncio.run`, which is already call in outer codebase.
+```
+
+# ── await in top scope ────────────────────────────────────────────
+```python
+import asyncio
+
+async def main():
+    # same correct logic
+
+# return await main() !!!Dangerous
+# The code runs in a synchronous context, can NOT use `await` in the top scope.
+```
+
+# ── no main entry function ────────────────────────────────────────────
+```python
+import asyncio
+
+async def my_agent_flow():
+    # same correct logic
+
+# There is no `main` function, the entry point is unknown, so execution results in an error.
 ```
 """
 
@@ -309,23 +376,22 @@ def _create_python_executor_tool(tools: Optional[dict[str, Callable]] = {}):
                     "Install dependencies fail",
                 )
 
-            output_path = base_dir / "output.pkl"
+            namespace = {"__name__": "__main__", **(tools or {})}
+            compiled = compile(code.strip(), "<string>", "exec")
+            exec(compiled, namespace)
 
-            exec_code = f"""
-import pickle
-
-{code.strip()}
-
-_result = locals().get("result", None)
-with open({str(output_path)!r}, "wb") as _f:
-    pickle.dump(_result, _f)
-"""
-            exec(exec_code, {"__name__": "__main__", **(tools or {})})
-
-            if output_path.exists():
-                with open(output_path, "rb") as f:
-                    return pickle.load(f)
-            return None
+            main = namespace.get("main", None)
+            if inspect.iscoroutinefunction(main):
+                try:
+                    loop = asyncio.get_running_loop()
+                    future = asyncio.run_coroutine_threadsafe(main(), loop)
+                    return future.result()
+                except RuntimeError:
+                    return asyncio.run(main())
+            elif callable(main):
+                return main()
+            else:
+                return "Error: main function not found."
 
         except Exception as e:
             return str(e)
@@ -334,9 +400,59 @@ with open({str(output_path)!r}, "wb") as _f:
             shutil.rmtree(str(base_dir), ignore_errors=True)
 
     async def async_python_executor(
-        code: str, dependencies: Optional[list[str]] = []
+        code: Annotated[
+            str,
+            "Python code to be executed. The outer codebase is Zero Indentation.",
+        ],
+        dependencies: Annotated[
+            Optional[list[str]],
+            "Third-party dependencies you import，such as ['requests', 'numpy==1.26.0'].",
+        ],
     ) -> Any:
-        return python_executor(code, dependencies)
+        base_dir = Path(
+            tempfile.mkdtemp(prefix="llm_exec_", dir=Path.home() / ".cache")
+        )
+        venv_dir = base_dir / ".venv"
+
+        try:
+            _run(["uv", "venv", str(venv_dir)], "Create venv fails")
+
+            if sys.platform == "win32":
+                python_path = venv_dir / "Scripts" / "python.exe"
+            else:
+                python_path = venv_dir / "bin" / "python"
+
+            if dependencies:
+                _run(
+                    [
+                        "uv",
+                        "pip",
+                        "install",
+                        "--quiet",
+                        "--python",
+                        str(python_path),
+                        *dependencies,
+                    ],
+                    "Install dependencies fail",
+                )
+
+            namespace = {"__name__": "__main__", **(tools or {})}
+            compiled = compile(code.strip(), "<string>", "exec")
+            exec(compiled, namespace)
+
+            main = namespace.get("main", None)
+            if inspect.iscoroutinefunction(main):
+                return await main()
+            elif callable(main):
+                return main()
+            else:
+                return "Error: main function not found."
+
+        except Exception as e:
+            return str(e)
+
+        finally:
+            shutil.rmtree(str(base_dir), ignore_errors=True)
 
     return StructuredTool.from_function(
         name="python_executor",
@@ -344,9 +460,7 @@ with open({str(output_path)!r}, "wb") as _f:
             Execute any code generated by LLM and support install third-party dependencies, but for speed, please use built-in dependencies whenever possible.
             IMPORTANT: Support invoke any other tools you have. You should prioritize using this tool in combination with other atomic tools to avoid multiple chained calls.
 
-            Returns:
-                The variable `result` in the code(if it exists), otherwise it returns None. The `result` support arbitrary Python object.
-                For example: python_executor("say('hi'); result = { 'a': 1 }") -> It'll print 'hi' and return { 'a': 1 }
+            Returns: The result value of the `main` function.
         """,
         func=python_executor,
         coroutine=async_python_executor,
@@ -364,11 +478,8 @@ class PythonExecutorMiddleware(AgentMiddleware):
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelResponse:
         self.atom_tools = {
-            tool.name: tool.func
-            for tool in request.tools
-            if tool.name != "python_executor"
+            tool.name: tool for tool in request.tools if tool.name != "python_executor"
         }
-
         return handler(request)
 
     async def awrap_model_call(
@@ -377,11 +488,8 @@ class PythonExecutorMiddleware(AgentMiddleware):
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelResponse:
         self.atom_tools = {
-            tool.name: tool.func
-            for tool in request.tools
-            if tool.name != "python_executor"
+            tool.name: tool for tool in request.tools if tool.name != "python_executor"
         }
-
         return await handler(request)
 
     def wrap_tool_call(

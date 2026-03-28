@@ -11,10 +11,11 @@ services:
     user: appuser
     command: sleep infinity
     environment:
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
       WORKSPACE: ${WORKSPACE:-/workspace}
-      MODEL_URL: ${MODEL_URL:-}
-      MODEL_MODEL: ${MODEL_MODEL:-}
-      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      OPENAI_URL: ${OPENAI_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-http://langfuse-web:3000}
