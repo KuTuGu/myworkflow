@@ -261,13 +261,12 @@ For any failures:
 )
 
 
-def TesterAgent():
-    return {
-        "name": "tester_agent",
-        "description": """
+TESTER_AGENT = {
+    "name": "tester_agent",
+    "description": """
             A professional software testing agent, which can analyze code modifications, generate test cases, execute test and output test results.
             Accepts file paths as input, if not specified, you need to generate a git diff patch file and pass the path to the testerAgent.
             IMPORTANT: ONLY PATH! DO NOT PASS THE SOURCE CONTENT!!!
         """,
-        "system_prompt": SYSTEM_PROMPT,
-    }
+    "system_prompt": SYSTEM_PROMPT,
+}

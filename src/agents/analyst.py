@@ -7,14 +7,11 @@ SYSTEM_PROMPT = """
     - Main topics, summaries, or key takeaways
     3. Structure the extracted information into a clear, organized format.
     4. Preserve source references and note any parsing limitations (e.g., scanned images without OCR, paywalled content, dynamic JavaScript-rendered pages).
-    IMPORTANT: You should always return the summary information rather than the full content.
 """
 
 
-def ReaderAgent():
-    return {
-        "name": "reader_agent",
-        "description": "A specifically reader Agent designed to extract summary information from file paths and URLs",
-        "system_prompt": SYSTEM_PROMPT,
-        "skills": ["./src/skills/analysis"],
-    }
+ANALYST_AGENT = {
+    "name": "analyst_agent",
+    "description": "A specifically analyst Agent is a local analyst that helps you read any local multimodal file, extract information according to content format, and output summary. Input: local file path or specific content.",
+    "system_prompt": SYSTEM_PROMPT,
+}

@@ -118,13 +118,12 @@ For every issue found:
 )
 
 
-def ReviewerAgent():
-    return {
-        "name": "reviewer_agent",
-        "description": """
+REVIEWER_AGENT = {
+    "name": "reviewer_agent",
+    "description": """
             A senior code reviewer agent, which evaluate code modifications, return structured feedback issues.
             Accepts file paths as input, if not specified, you need to generate a git diff patch file and pass the path to the reviewerAgent.
             IMPORTANT: ONLY PATH! DO NOT PASS THE SOURCE CONTENT!!!
         """,
-        "system_prompt": SYSTEM_PROMPT,
-    }
+    "system_prompt": SYSTEM_PROMPT,
+}

@@ -163,9 +163,8 @@ Conclude with a brief section:
 )
 
 
-def CoderAgent():
-    return {
-        "name": "coder_agent",
-        "description": "A senior software engineer, focusing on generating, refactoring, and designing engineering-compliant production-grade code.",
-        "system_prompt": SYSTEM_PROMPT,
-    }
+CODER_AGENT = {
+    "name": "coder_agent",
+    "description": "A senior software engineer, focusing on generating, refactoring, and designing engineering-compliant production-grade code.",
+    "system_prompt": SYSTEM_PROMPT,
+}

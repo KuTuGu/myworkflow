@@ -431,7 +431,7 @@ wheels = [
 [[package]]
 name = "deepagents-acp"
 version = "0.0.4"
-source = { git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=feature%2Facp-logger#a2c142afe10dab8df1134a3badd5fb07bb9a1f04" }
+source = { git = "https://github.com/KuTuGu/deepagents.git?subdirectory=libs%2Facp&rev=feature%2Facp-logger#2bae2a5bf1367f6692bc9a0ac44ab526a71fbf81" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "deepagents" },

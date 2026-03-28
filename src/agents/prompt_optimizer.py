@@ -130,9 +130,8 @@ Score the current version on the following dimensions (0–10 each):
 """
 
 
-def PromptOptimizerAgent():
-    return {
-        "name": "prompt_optimizer_agent",
-        "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the ReviewerAgent and TesterAgent feedback issues, enabling the CoderAgent to prevent similar errors from recurring.",
-        "system_prompt": SYSTEM_PROMPT,
-    }
+PROMPT_OPTIMIZER_AGENT = {
+    "name": "prompt_optimizer_agent",
+    "description": "A prompt optimizer is to make effective modifications to the coder agent's original prompt based on the ReviewerAgent and TesterAgent feedback issues, enabling the CoderAgent to prevent similar errors from recurring.",
+    "system_prompt": SYSTEM_PROMPT,
+}
